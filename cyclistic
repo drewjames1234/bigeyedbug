@@ -106,5 +106,105 @@ SELECT
 FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
 
 
+---create means of calculating trip lengths----
+
+TIMESTAMP_DIFF(ended_at, started_at, SECOND) AS trip_length_seconds
+
+AVG(trip_length_seconds) AS avg_trip_length_seconds
+
+AVG(trip_length_seconds) / 60 AS avg_trip_length_minutes
 
 
+SELECT
+  ride_id,
+  started_at,
+  ended_at,
+  TIMESTAMP_DIFF(ended_at, started_at, SECOND) AS trip_length_seconds,
+  TIMESTAMP_DIFF(ended_at, started_at, MINUTE) AS trip_length_minutes,
+  TIMESTAMP_DIFF(ended_at, started_at, HOUR) AS trip_length_hours
+FROM
+
+SELECT
+  AVG(TIMESTAMP_DIFF(ended_at, started_at, MINUTE)) AS avg_trip_length_minutes
+FROM
+  `capstonecycles.Cyclisticdata1.Cyclistictable1`;
+
+
+----Day of the week column----
+SELECT
+   ride_id,
+   -- Other columns...
+   CASE
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 1 THEN 'Sun'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 2 THEN 'Mon'
+      -- Add other days as needed
+      ELSE 'Sat'
+   END AS day_of_week
+FROM null_station_names_cleaned;
+
+
+---group by casual or member-----
+SELECT
+   member_casual,
+   COUNT(*) AS member_casual_count
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+GROUP BY member_casual
+
+----seasonal classification----
+SELECT
+   ride_id,
+   -- Other columns...
+   CASE
+      WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2) THEN 'Winter'
+      WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5) THEN 'Spring'
+      WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8) THEN 'Summer'
+      WHEN EXTRACT(MONTH FROM started_at) IN (9, 10, 11) THEN 'Autumn'
+      ELSE 'Unknown'  -- Handle cases where the month is not in the expected range
+   END AS season
+FROM null_station_names_cleaned;
+
+---combine start station lat and name in same query for the purpose of understanding popular locations ----
+SELECT
+  start_lat,
+  start_station_name,
+  COUNT(*) AS start_count
+FROM
+  `capstonecycles.Cyclisticdata1.Cyclistictable1`
+GROUP BY
+  start_lat, start_station_name
+ORDER BY
+  start_count DESC;
+
+SELECT
+ end_lat,
+end_station_name,
+  COUNT(*) AS start_count
+FROM
+  `capstonecycles.Cyclisticdata1.Cyclistictable1`
+GROUP BY
+  start_lat, start_station_name
+ORDER BY
+  start_count DESC;
+
+---determine popular start / end points in descending order----
+
+SELECT
+  start_station_name,
+  start_lat,
+  start_lng,
+  COUNT(*) AS start_count,
+  end_station_name,
+  end_lat,
+  end_lng,
+  COUNT(*) AS end_count
+FROM
+  `capstonecycles.Cyclisticdata1.Cyclistictable1`
+GROUP BY
+  start_station_name,
+  start_lat,
+  start_lng,
+  end_station_name,
+  end_lat,
+  end_lng
+ORDER BY
+  start_count
