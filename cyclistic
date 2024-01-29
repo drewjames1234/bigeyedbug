@@ -1,1 +1,110 @@
+---Below are examples of some SQL code I used when preparing, cleaning and analysing data as part of my Capstone project, Cyclistic cycles---
+
+Preparing / cleaning data
+
+---Inspecting columns----
+
+SELECT DISTINCT *
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+
+----Define CTE for cleaning null values and ensuring valid coordinates---
+sql
+
+
+WITH null_station_names_cleaned AS (
+   SELECT *
+   FROM `capstonecycles.Cyclisticdata1.Cyclistictable1` cd
+   LEFT JOIN null_station_names nsn
+   ON cd.ride_id = nsn.bad_ride_id
+   WHERE nsn.bad_ride_id IS NULL AND
+      cd.start_lat IS NOT NULL AND
+      cd.start_lng IS NOT NULL AND
+      cd.end_lat IS NOT NULL AND
+      cd.end_lng IS NOT NULL
+);
+----Define CTE for transforming data (e.g., renaming rideable types).
+
+-WITH aggregated_tripdata AS (
+   SELECT ride_id,
+      REPLACE(rideable_type, 'docked_bike', 'classic_bike') AS ride_type,
+      -- Other transformations...
+   FROM null_station_names_cleaned 
+)
+
+
+---- Define null_station_names_cleaned CTE----
+WITH null_station_names_cleaned AS (
+   SELECT *
+   FROM `capstonecycles.Cyclisticdata1.Cyclistictable1` cd
+   WHERE cd.start_lat IS NOT NULL AND
+
+-- Define null_station_names_cleaned CTE
+WITH null_station_names_cleaned AS (
+   SELECT *
+   FROM `capstonecycles.Cyclisticdata1.Cyclistictable1` cd
+   WHERE cd.start_lat IS NOT NULL AND
+         cd.start_lng IS NOT NULL AND
+         cd.end_lat IS NOT NULL AND
+         cd.end_lng IS NOT NULL
+)
+
+-- Use null_station_names_cleaned CTE in the same WITH clause
+, aggregated_tripdata AS (
+   SELECT ride_id,
+      REPLACE(rideable_type, 'docked_bike', 'classic_bike') AS ride_type,
+      started_at,
+      ended_at,
+      IFNULL(TRIM(REPLACE(start_station_name, '(Temp)', '')), 'On Bike Lock') AS starting_station_name,
+      IFNULL(TRIM(REPLACE(end_station_name, '(Temp)', '')), 'On Bike Lock') AS ending_station_name,
+      -- Additional columns...
+   FROM null_station_names_cleaned 
+)
+
+-- Use aggregated_tripdata CTE
+SELECT *
+FROM aggregated_tripdata;
+
+SELECT DISTINCT *
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+
+
+UPDATE null_station_names_cleaned
+SET
+  rideable_type = REPLACE(rideable_type, 'docked_bike', 'classic_bike'),
+  start_station_name = TRIM(REPLACE(start_station_name, '(Temp)', '')),
+  end_station_name = TRIM(REPLACE(end_station_name, '(Temp)', ''))
+WHERE
+  (ride_id = '16' OR ride_id IS NULL) AND
+  start_lat IS NOT NULL AND
+  start_lng IS NOT NULL AND
+  end_lat IS NOT NULL AND
+  end_lng IS NOT NULL;
+
+ANALYSE 
+
+----analyse transformed data and apply additional queries---
+
+SELECT *
+FROM aggregated_tripdata;
+
+GROUP BY LENGTH(ride_id);
+
+
+SELECT
+  ride_id,
+  started_at,
+  ended_at,
+  TIMESTAMP_DIFF(ended_at, started_at, SECOND) AS trip_length_seconds,
+  TIMESTAMP_DIFF(ended_at, started_at, MINUTE) AS trip_length_minutes,
+  TIMESTAMP_DIFF(ended_at, started_at, HOUR) AS trip_length_hours
+FROM
+  `capstonecycles.Cyclisticdata1.Cyclistictable1`;
+
+----calculate av trip length--
+SELECT
+   AVG(trip_length) AS av_trip_length
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+
+
+
 
