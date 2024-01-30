@@ -210,13 +210,6 @@ ORDER BY
   start_count
 
 
----
-
-
-
-
-
-
 ----filter by days of week and season-----
 ay_season_counts AS (
   SELECT
