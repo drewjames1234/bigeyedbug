@@ -208,3 +208,41 @@ GROUP BY
   end_lng
 ORDER BY
   start_count
+
+
+---
+
+
+
+
+
+
+----filter by days of week and season-----
+ay_season_counts AS (
+  SELECT
+    CASE
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 1 THEN 'Sun'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 2 THEN 'Mon'
+      -- Add other days as needed
+      ELSE 'Sat'
+    END AS day_of_week,
+    CASE
+      WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2) THEN 'Winter'
+      WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5) THEN 'Spring'
+      WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8) THEN 'Summer'
+      WHEN EXTRACT(MONTH FROM started_at) IN (9, 10, 11) THEN 'Autumn'
+      ELSE 'Unknown'
+    END AS season,
+    member_casual,
+    COUNT(*) AS ride_count
+  FROM aggregated_tripdata
+  GROUP BY day_of_week, season, member_casual
+)
+
+SELECT
+  day_of_week,
+  season,
+  member_casual,
+  ride_count,
+  ride_count / SUM(ride_count) OVER (PARTITION BY day_of_week, season) AS proportion
+FROM day_season_counts;
