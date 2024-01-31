@@ -87,20 +87,34 @@ ANALYSE
 SELECT *
 FROM aggregated_tripdata;
 
-GROUP BY LENGTH(ride_id);
-
+GROUP BY LENGTH(ride_id)---exluding trips less than a minute
 
 SELECT
-  ride_id,
-  started_at,
-  ended_at,
-  TIMESTAMP_DIFF(ended_at, started_at, SECOND) AS trip_length_seconds,
-  TIMESTAMP_DIFF(ended_at, started_at, MINUTE) AS trip_length_minutes,
-  TIMESTAMP_DIFF(ended_at, started_at, HOUR) AS trip_length_hours
-FROM
-  `capstonecycles.Cyclisticdata1.Cyclistictable1`;
+  CEIL(TIMESTAMP_DIFF(ended_at, started_at, SECOND) / 60) AS rounded_trip_length_minutes,
+  COUNT(*) AS trip_count
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+GROUP BY rounded_trip_length_minutes
+HAVING rounded_trip_length_minutes > 0; -- Exclude trips less than a minute
 
-----calculate av trip length--
+---revised the above to sum in hours and minutes---
+
+SELECT
+  rounded_trip_length_minutes,
+  CONCAT(
+    LPAD(CAST(FLOOR(CAST(rounded_trip_length_minutes AS INT64) / 60) AS STRING), 2, '0'), ':',
+    LPAD(CAST(MOD(CAST(rounded_trip_length_minutes AS INT64), 60) AS STRING), 2, '0')
+  ) AS trip_length_formatted,
+  COUNT(*) AS trip_count
+FROM (
+  SELECT
+    ride_id,
+    CEIL(TIMESTAMP_DIFF(ended_at, started_at, SECOND) / 60) AS rounded_trip_length_minutes
+  FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+) AS subquery
+WHERE rounded_trip_length_minutes > 0
+GROUP BY rounded_trip_length_minutes;
+
+------calculate av trip length-----
 SELECT
    AVG(trip_length) AS av_trip_length
 FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
@@ -149,6 +163,23 @@ SELECT
    COUNT(*) AS member_casual_count
 FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
 GROUP BY member_casual
+
+
+----Day of the week---for Member and Casual
+
+SELECT
+  EXTRACT(DAYOFWEEK FROM started_at) AS day_of_week,
+  COUNT(*) AS total_rides,
+  COUNT(CASE WHEN member_casual = 'member' THEN 1 END) AS member_rides,
+  COUNT(CASE WHEN member_casual = 'casual' THEN 1 END) AS casual_rides,
+  AVG(TIMESTAMP_DIFF(ended_at, started_at, MINUTE)) AS avg_trip_length_minutes
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+WHERE start_lat IS NOT NULL
+  AND start_lng IS NOT NULL
+  AND end_lat IS NOT NULL
+  AND end_lng IS NOT NULL
+GROUP BY day_of_week;
+
 
 ----seasonal classification----
 SELECT
@@ -231,7 +262,7 @@ ay_season_counts AS (
   FROM aggregated_tripdata
   GROUP BY day_of_week, season, member_casual
 )
-
+---days of the week & season count by members & casual------------
 SELECT
   day_of_week,
   season,
