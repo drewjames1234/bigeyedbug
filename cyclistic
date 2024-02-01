@@ -295,3 +295,43 @@ SELECT
   ride_count,
   ride_count / SUM(ride_count) OVER (PARTITION BY day_of_week, season) AS proportion
 FROM day_season_counts;
+
+----the above is revised to below-----
+
+WITH null_station_names_cleaned AS (
+  -- Your cleaning transformations here
+  SELECT *
+  FROM `capstonecycles.Cyclisticdata1.Cyclistictable1` cd
+  WHERE cd.start_lat IS NOT NULL AND
+        cd.start_lng IS NOT NULL AND
+        cd.end_lat IS NOT NULL AND
+        cd.end_lng IS NOT NULL
+),
+day_season_counts AS (
+  SELECT
+    CASE
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 1 THEN 'Sun'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 2 THEN 'Mon'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 3 THEN 'Tue'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 4 THEN 'Wed'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 5 THEN 'Thu'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 6 THEN 'Fri'
+      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 7 THEN 'Sat'
+      ELSE 'Unknown'
+    END AS day_of_week,
+    CASE
+      WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2) THEN 'Winter'
+      WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5) THEN 'Spring'
+      WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8) THEN 'Summer'
+      WHEN EXTRACT(MONTH FROM started_at) IN (9, 10, 11) THEN 'Autumn'
+      ELSE 'Unknown'
+    END AS season,
+    member_casual,
+    COUNT(*) AS ride_count
+  FROM null_station_names_cleaned
+  GROUP BY day_of_week, season, member_casual
+)
+
+-- Include the rest of your query here, using the day_season_counts CTE as needed
+SELECT
+ 
