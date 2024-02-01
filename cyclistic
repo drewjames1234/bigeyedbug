@@ -114,6 +114,31 @@ FROM (
 WHERE rounded_trip_length_minutes > 0
 GROUP BY rounded_trip_length_minutes;
 
+--------revised again ----- 
+SELECT
+  rounded_trip_length_minutes,
+  CONCAT(
+    LPAD(CAST(FLOOR(CAST(rounded_trip_length_minutes AS INT64) / 60) AS STRING), 2, '0'), ':',
+    LPAD(CAST(MOD(CAST(rounded_trip_length_minutes AS INT64), 60) AS STRING), 2, '0')
+  ) AS trip_length_formatted,
+  member_casual,
+  COUNT(*) AS trip_count
+FROM (
+  SELECT
+    ride_id,
+    CEIL(TIMESTAMP_DIFF(ended_at, started_at, SECOND) / 60) AS rounded_trip_length_minutes,
+    member_casual
+  FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+) AS subquery
+WHERE rounded_trip_length_minutes > 0
+GROUP BY rounded_trip_length_minutes, member_casual
+
+
+
+
+
+
+
 ------calculate av trip length-----
 SELECT
    AVG(trip_length) AS av_trip_length
