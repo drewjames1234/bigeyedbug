@@ -134,11 +134,6 @@ WHERE rounded_trip_length_minutes > 0
 GROUP BY rounded_trip_length_minutes, member_casual
 
 
-
-
-
-
-
 ------calculate av trip length-----
 SELECT
    AVG(trip_length) AS av_trip_length
@@ -206,6 +201,23 @@ WHERE start_lat IS NOT NULL
 GROUP BY day_of_week;
 
 
+---count of trip lengths (member and casual) days of week
+
+SELECT
+  EXTRACT(DAYOFWEEK FROM started_at) AS day_of_week,
+  COUNT(*) AS total_rides,
+  COUNT(CASE WHEN member_casual = 'member' THEN 1 END) AS member_rides,
+  COUNT(CASE WHEN member_casual = 'casual' THEN 1 END) AS casual_rides,
+  AVG(TIMESTAMP_DIFF(ended_at, started_at, MINUTE)) AS avg_trip_length_minutes
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+WHERE start_lat IS NOT NULL
+  AND start_lng IS NOT NULL
+  AND end_lat IS NOT NULL
+  AND end_lng IS NOT NULL
+GROUP BY day_of_week
+ORDER BY total_rides DESC, avg_trip_length_minutes DESC;
+
+
 ----seasonal classification----
 SELECT
    ride_id,
@@ -264,6 +276,105 @@ GROUP BY
   end_lng
 ORDER BY
   start_count
+
+----trip lengths by days of the week---
+
+SELECT
+  CASE
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 1 THEN 'Sunday'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 2 THEN 'Monday'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 3 THEN 'Tuesday'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 4 THEN 'Wednesday'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 5 THEN 'Thursday'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 6 THEN 'Friday'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 7 THEN 'Saturday'
+    ELSE 'Unknown'
+  END AS day_of_week,
+  COUNT(*) AS total_rides,
+  COUNT(CASE WHEN member_casual = 'member' THEN 1 END) AS member_rides,
+  COUNT(CASE WHEN member_casual = 'casual' THEN 1 END) AS casual_rides,
+  AVG(TIMESTAMP_DIFF(ended_at, started_at, MINUTE)) AS avg_trip_length_minutes
+FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+WHERE start_lat IS NOT NULL
+  AND start_lng IS NOT NULL
+  AND end_lat IS NOT NULL
+  AND end_lng IS NOT NULL
+GROUP BY day_of_week
+ORDER BY total_rides DESC, avg_trip_length_minutes DESC;
+
+-----correlation coefficient on day time rides, casual and members-----
+WITH daily_stats AS (
+  -- Your existing query here
+)
+
+SELECT
+  member_casual,
+  CORR(COUNT(*), AVG(trip_duration_minutes)) AS correlation_coefficient
+FROM daily_stats
+WHERE day_of_week NOT IN ('Saturday', 'Sunday')  -- Exclude weekends
+GROUP BY member_casual;
+-----Hours of day with correlatino query-----
+daily_stats AS (
+  SELECT
+    day_of_week,
+    hour_of_day,
+    member_casual,
+    COUNT(*) AS num_rides,
+    AVG(trip_duration_minutes) AS avg_duration
+  FROM time_of_day_stats
+  WHERE day_of_week NOT IN ('Saturday', 'Sunday')  -- Exclude weekends
+  GROUP BY day_of_week, hour_of_day, member_casual
+)
+
+SELECT
+  day_of_week,
+  hour_of_day,
+  member_casual,
+  CORR(num_rides, avg_duration) AS correlation_coefficient
+FROM daily_stats
+GROUP BY day_of_week, hour_of_day, member_casual
+ORDER BY day_of_week, hour_of_day, member_casual;
+
+
+-----correlation coefficient and results for counts and duration at various pariods of time during weekdays---
+
+WITH time_of_day_stats AS (
+  SELECT
+    EXTRACT(HOUR FROM TIMESTAMP(started_at)) AS hour_of_day,
+    FLOOR((EXTRACT(MINUTE FROM TIMESTAMP(started_at)) / 15) + 1) AS time_interval,
+    member_casual,
+    CEIL(TIMESTAMP_DIFF(ended_at, started_at, SECOND) / 60) AS trip_duration_minutes
+  FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+  WHERE start_lat IS NOT NULL
+    AND start_lng IS NOT NULL
+    AND end_lat IS NOT NULL
+    AND end_lng IS NOT NULL
+    AND TIMESTAMP_DIFF(ended_at, started_at, SECOND) >= 60  -- Exclude trips less than one minute
+    AND EXTRACT(DAYOFWEEK FROM TIMESTAMP(started_at)) NOT IN (1, 7)  -- Exclude Saturday and Sunday
+),
+
+subquery AS (
+  SELECT
+    hour_of_day,
+    time_interval,
+    member_casual,
+    COUNT(*) AS num_rides,
+    AVG(trip_duration_minutes) AS avg_duration
+  FROM time_of_day_stats
+  GROUP BY hour_of_day, time_interval, member_casual
+)
+
+SELECT
+  hour_of_day,
+  time_interval,
+  member_casual,
+  COUNT(*) AS num_rides,
+  AVG(avg_duration) AS avg_duration,
+  CORR(num_rides, avg_duration) AS correlation_coefficient
+FROM subquery
+GROUP BY hour_of_day, time_interval, member_casual
+ORDER BY hour_of_day DESC, time_interval, member_casual;
+
 
 
 ----filter by days of week and season-----
