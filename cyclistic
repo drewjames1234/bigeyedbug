@@ -407,42 +407,148 @@ SELECT
   ride_count / SUM(ride_count) OVER (PARTITION BY day_of_week, season) AS proportion
 FROM day_season_counts;
 
-----the above is revised to below-----
+----the above is revised to below-----sort by descending order of counts
 
-WITH null_station_names_cleaned AS (
-  -- Your cleaning transformations here
-  SELECT *
-  FROM `capstonecycles.Cyclisticdata1.Cyclistictable1` cd
-  WHERE cd.start_lat IS NOT NULL AND
-        cd.start_lng IS NOT NULL AND
-        cd.end_lat IS NOT NULL AND
-        cd.end_lng IS NOT NULL
-),
-day_season_counts AS (
-  SELECT
-    CASE
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 1 THEN 'Sun'
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 2 THEN 'Mon'
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 3 THEN 'Tue'
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 4 THEN 'Wed'
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 5 THEN 'Thu'
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 6 THEN 'Fri'
-      WHEN EXTRACT(DAYOFWEEK FROM started_at) = 7 THEN 'Sat'
-      ELSE 'Unknown'
-    END AS day_of_week,
-    CASE
-      WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2) THEN 'Winter'
-      WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5) THEN 'Spring'
-      WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8) THEN 'Summer'
-      WHEN EXTRACT(MONTH FROM started_at) IN (9, 10, 11) THEN 'Autumn'
-      ELSE 'Unknown'
-    END AS season,
-    member_casual,
-    COUNT(*) AS ride_count
-  FROM null_station_names_cleaned
-  GROUP BY day_of_week, season, member_casual
-)
-
--- Include the rest of your query here, using the day_season_counts CTE as needed
 SELECT
- 
+  CASE
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 1 THEN 'Sun'
+    WHEN EXTRACT(DAYOFWEEK FROM started_at) = 2 THEN 'Mon'
+    -- Add other days as needed
+    ELSE 'Sat'
+  END AS day_of_week,
+  CASE
+    WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2) THEN 'Winter'
+    WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5) THEN 'Spring'
+    WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8) THEN 'Summer'
+    WHEN EXTRACT(MONTH FROM started_at) IN (9, 10, 11) THEN 'Autumn'
+    ELSE 'Unknown'
+  END AS season,
+  member_casual,
+  COUNT(*) AS ride_count
+FROM (
+  SELECT
+    ride_id,
+    REPLACE(rideable_type, 'docked_bike', 'classic_bike') AS ride_type,
+    member_casual,
+    started_at
+  FROM `capstonecycles.Cyclisticdata1.Cyclistictable1`
+  WHERE start_lat IS NOT NULL
+    AND start_lng IS NOT NULL
+    AND end_lat IS NOT NULL
+    AND end_lng IS NOT NULL
+)
+GROUP BY day_of_week, season, member_casual
+ORDER BY ride_count DESC;
+
+   
+
+---comparison casual / members over hours of day
+SELECT 
+  hour_of_day,
+  -- Conditional aggregation for member and casual total rides
+  SUM(CASE WHEN member_casual = 'member' THEN total_rides ELSE 0 END) AS member_total_rides,
+  SUM(CASE WHEN member_casual = 'casual' THEN total_rides ELSE 0 END) AS casual_total_rides,
+  -- Conditional aggregation for member and casual average duration
+  AVG(CASE WHEN member_casual = 'member' THEN avg_duration END) AS member_avg_duration,
+  AVG(CASE WHEN member_casual = 'casual' THEN avg_duration END) AS casual_avg_duration
+FROM (
+  SELECT
+    EXTRACT(HOUR FROM TIMESTAMP(started_at)) AS hour_of_day,
+    COUNT(*) AS total_rides,
+    AVG(TIMESTAMP_DIFF(ended_at, started_at, SECOND) / 60.0) AS avg_duration,
+    member_casual
+  FROM
+    `capstonecycles.Cyclisticdata1.Cyclistictable1`
+  WHERE
+    start_lat IS NOT NULL
+    AND start_lng IS NOT NULL
+    AND end_lat IS NOT NULL
+    AND end_lng IS NOT NULL
+    AND TIMESTAMP_DIFF(ended_at, started_at, SECOND) >= 60
+    AND EXTRACT(DAYOFWEEK FROM TIMESTAMP(started_at)) NOT IN (1, 7)  -- Exclude Saturday and Sunday
+    AND member_casual IN ('member', 'casual')  -- Filter for both member and casual riders
+  GROUP BY
+    hour_of_day, member_casual
+)
+GROUP BY
+  hour_of_day
+ORDER BY
+  hour_of_day;
+
+
+-----comparison of casual riders and members over hours of the day, returing the hour that casual riders are highest relative to members, and compared to other hours--
+SELECT * FROM (
+SELECT clmn0_, SUM(clmn0_) AS clmn100000_, COUNT(1) AS clmn100001_ FROM (
+SELECT t0.hour_of_day AS clmn0_ FROM (
+SELECT
+  hour_of_day,
+  SUM(
+    CASE
+      WHEN member_casual = 'member' THEN total_rides
+      ELSE 0
+    END) AS member_total_rides,
+  SUM(
+    CASE
+      WHEN member_casual = 'casual' THEN total_rides
+      ELSE 0
+    END) AS casual_total_rides,
+  AVG(
+    CASE
+      WHEN member_casual = 'member' THEN avg_duration
+    END) AS member_avg_duration,
+  AVG(
+    CASE
+      WHEN member_casual = 'casual' THEN avg_duration
+    END) AS casual_avg_duration
+FROM
+  (
+    SELECT
+      EXTRACT(HOUR FROM TIMESTAMP(started_at)) AS hour_of_day,
+      COUNT(*) AS total_rides,
+      AVG(TIMESTAMP_DIFF(ended_at, started_at, SECOND) / 60.0) AS avg_duration,
+      member_casual
+    FROM
+      `capstonecycles.Cyclisticdata1.Cyclistictable1`
+    WHERE
+      start_lat IS NOT NULL AND start_lng IS NOT NULL AND end_lat IS NOT NULL AND end_lng IS NOT NULL AND TIMESTAMP_DIFF(ended_at,
+        started_at, SECOND) >= 60 AND EXTRACT(DAYOFWEEK FROM TIMESTAMP(started_at)) NOT IN (1, 7) AND member_casual IN
+      ('member', 'casual')
+    GROUP BY hour_of_day, member_casual
+  )
+GROUP BY hour_of_day
+ORDER BY hour_of_day
+) t0
+) GROUP BY clmn0_
+) LIMIT 20000000
+
+#]
+----top start stations for membbers and casual riders-------
+-- Query for top start stations for both casual and member riders
+SELECT 
+    start_station_name,
+    SUM(CASE WHEN member_casual = 'casual' THEN 1 ELSE 0 END) AS casual_trips,
+    SUM(CASE WHEN member_casual = 'member' THEN 1 ELSE 0 END) AS member_trips
+FROM capstonecycles.Cyclisticdata1.Cyclistictable1
+WHERE 
+    member_casual IN ('casual', 'member')  -- Filter for both casual and member riders
+GROUP BY 
+    start_station_name
+ORDER BY 
+    casual_trips DESC
+LIMIT 10;  -- Limit the results to the top 10 start stations
+
+---end station ---- members (amend for casuals)-----------------------------------
+
+SELECT 
+    end_station_name,
+    end_lat,
+    end_lng,
+    SUM(CASE WHEN member_casual = 'member' THEN 1 ELSE 0 END) AS member_trips
+FROM capstonecycles.Cyclisticdata1.Cyclistictable1
+WHERE 
+    member_casual = 'member'  -- Filter for member riders
+GROUP BY 
+    end_station_name, end_lat, end_lng
+ORDER BY 
+    member_trips DESC
+LIMIT 10;  -- Limit the results to the top 10 end stations for members
